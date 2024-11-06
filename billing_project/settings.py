@@ -51,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'billing_app.utils.middleware.JWTAuthMiddleware',
 ]
 
 ROOT_URLCONF = 'billing_project.urls'
@@ -112,7 +113,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',
     ),
 }
 
@@ -136,9 +137,9 @@ USE_I18N = True
 
 USE_TZ = True
 
-SESSION_COOKIE_SECURE = True # added as part of JWT httponly enhancement
+SESSION_COOKIE_SECURE = False # Set this to true in production, added as part of JWT httponly enhancement
 
-CSRF_COOKIE_SECURE = True # added as part of JWT httponly enhancement
+CSRF_COOKIE_SECURE = False # Set this to true in production, added as part of JWT httponly enhancement
 
 
 # Static files (CSS, JavaScript, Images)
