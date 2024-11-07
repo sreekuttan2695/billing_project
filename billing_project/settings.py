@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'billing_app',
     'rest_framework',
     'rest_framework_simplejwt',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -52,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'billing_app.utils.middleware.JWTAuthMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'billing_project.urls'
@@ -73,6 +75,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'billing_project.wsgi.application'
+
+AUTH_USER_MODEL = 'billing_app.CustomUser'  # Replace 'your_app' with the name of your app
+
 
 
 # Database
@@ -113,7 +118,8 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.AllowAny',
+        #'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ),
 }
 
@@ -137,9 +143,13 @@ USE_I18N = True
 
 USE_TZ = True
 
-SESSION_COOKIE_SECURE = False # Set this to true in production, added as part of JWT httponly enhancement
+SESSION_COOKIE_SECURE = True # Set this to true in production, added as part of JWT httponly enhancement
 
-CSRF_COOKIE_SECURE = False # Set this to true in production, added as part of JWT httponly enhancement
+CSRF_COOKIE_SECURE = True # Set this to true in production, added as part of JWT httponly enhancement
+
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
 
 
 # Static files (CSS, JavaScript, Images)

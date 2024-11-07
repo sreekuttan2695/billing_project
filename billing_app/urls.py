@@ -1,13 +1,13 @@
 from django.urls import path
-from .views import ProtectedView, CookieTokenObtainView, CookieTokenRefreshView, LogoutView
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
+from .views import (CustomUserLoginView, CustomTokenRefreshView, CustomUserLogoutView,
+                    CreateUserView, CreateClientView, ProtectedView)
 
 urlpatterns = [
-    path('api/token/', CookieTokenObtainView.as_view(), name='token_obtain'),
-    path('api/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
-    path('api/logout/', LogoutView.as_view(), name='logout'),
-    path('protected-view/', ProtectedView.as_view(), name='protected-view'),
+    path('api/login/', CustomUserLoginView.as_view(), name='custom-user-login'),
+    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='custom-token-refresh'),
+    path('api/logout/', CustomUserLogoutView.as_view(), name='custom-user-logout'),
+    path('api/create-user/', CreateUserView.as_view(), name='create-user'),
+    path('api/create-client/', CreateClientView.as_view(), name='create-client'),
+    path('protected/', ProtectedView.as_view(), name='protected-view'),
+   # path('api/create-client/', ClientCreateView.as_view(), name='create-client'),
 ]
