@@ -8,6 +8,7 @@ from .models import CustomUser
 from django.contrib.auth import authenticate
 from django.db import transaction
 from .serializers import CustomUserSerializer, ClientSerializer
+from .permissions import IsSuperAdminUser
 
 # Login View
 class CustomUserLoginView(APIView):
@@ -94,6 +95,7 @@ class CustomUserLogoutView(APIView):
         return response
 
 class CreateUserView(APIView):
+    permission_classes = [IsSuperAdminUser]  # Restrict access to superusers or "superadmin"
     def post(self, request):
         serializer = CustomUserSerializer(data=request.data)
         if serializer.is_valid():
@@ -103,6 +105,7 @@ class CreateUserView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class CreateClientView(APIView):
+    permission_classes = [IsSuperAdminUser]  # Restrict access to superusers or "superadmin"
     def post(self, request):
         serializer = ClientSerializer(data=request.data)
         if serializer.is_valid():
