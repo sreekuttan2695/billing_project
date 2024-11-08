@@ -7,8 +7,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser
 from django.contrib.auth import authenticate
 from django.db import transaction
-from .serializers import CustomUserSerializer, ClientSerializer
+from .serializers import CustomUserSerializer, ClientSerializer, ProductSerializer
 from .permissions import IsSuperAdminUser
+from django.views import View
+from django.http import JsonResponse
+from django.db import connection
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import json
 
 # Login View
 class CustomUserLoginView(APIView):
@@ -87,6 +94,7 @@ class CustomTokenRefreshView(APIView):
 
 # Logout View
 class CustomUserLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         response = Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
         response.delete_cookie('access_token')
@@ -119,3 +127,155 @@ class ProtectedView(APIView):
 
     def get(self, request):
         return Response({"message": "This is a protected view. Access granted!"})
+
+# /product end points starts here
+@method_decorator(csrf_exempt, name='dispatch')
+class ProductView(View):
+
+    def get_client_id_from_cookie(self, request):
+        client_id = request.COOKIES.get('client_id')
+        if not client_id:
+            return JsonResponse({"error": "client_id is missing from cookies."}, status=400)
+        return client_id
+
+    def get(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):  # If client_id retrieval failed, return the error response
+            return client_id
+
+        # Get query parameters for search and category filtering
+        search_query = request.GET.get('search', '')
+        selected_categories = request.GET.getlist('categories')  # Expects a list of categories
+
+        # Base SQL query for fetching products
+        sql_query = "SELECT * FROM Product WHERE client_id = %s"
+        params = [client_id]
+
+        # Apply search filter if provided
+        if search_query:
+            sql_query += " AND name LIKE %s"
+            params.append(f"%{search_query}%")
+
+        # Apply category filter if any categories are selected
+        if selected_categories:
+            placeholders = ','.join(['%s'] * len(selected_categories))
+            sql_query += f" AND category IN ({placeholders})"
+            params.extend(selected_categories)
+
+        # Order by product_id
+        sql_query += " ORDER BY product_id"
+
+        # Fetch products
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query, params)
+            products = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            product_list = [dict(zip(columns, product)) for product in products]
+
+        # Fetch distinct categories for the sidebar filter
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT DISTINCT category FROM Product WHERE client_id = %s", [client_id])
+            categories = [row[0] for row in cursor.fetchall()]
+
+        return JsonResponse({
+            "products": product_list,
+            "categories": categories
+        }, status=200)
+
+    def post(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO Product (client_id, name, HSN_code, tax_percentage, unit, category, brand, 
+                    default_selling_price, sales_rank, created_on, created_by, last_updated_on, last_updated_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, [
+                client_id,
+                data['name'],
+                data['HSN_code'],
+                data['tax_percentage'],
+                data['unit'],
+                data.get('category', None),
+                data.get('brand', None),
+                data['default_selling_price'],
+                data.get('sales_rank', None),
+                timezone.now(),
+                data['created_by'],
+                timezone.now(),
+                data['last_updated_by']
+            ])
+
+        return JsonResponse({"message": "Product added successfully."}, status=201)
+
+    def put(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        product_id = data.get("product_id")
+        if not product_id:
+            return JsonResponse({"error": "product_id is required for updating a product."}, status=400)
+
+        # Check if the product exists
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM Product WHERE product_id = %s AND client_id = %s", [product_id, client_id])
+            product = cursor.fetchone()
+            if not product:
+                return JsonResponse({"error": "Product not found or not authorized to modify this product."},
+                                    status=404)
+
+        # Prepare SQL query to update only the fields that have been provided
+        sql_query = """
+            UPDATE Product
+            SET name = %s, HSN_code = %s, tax_percentage = %s, unit = %s, category = %s, brand = %s, 
+                default_selling_price = %s, sales_rank = %s, last_updated_on = %s, last_updated_by = %s
+            WHERE product_id = %s AND client_id = %s
+        """
+
+        params = [
+            data['name'],
+            data['HSN_code'],
+            data['tax_percentage'],
+            data['unit'],
+            data.get('category', None),
+            data.get('brand', None),
+            data['default_selling_price'],
+            data.get('sales_rank', None),
+            timezone.now(),
+            data['last_updated_by'],
+            product_id,
+            client_id
+        ]
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query, params)
+
+        return JsonResponse({"message": "Product updated successfully."}, status=200)
+
+    def delete(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        product_id = data.get("product_id")
+        if not product_id:
+            return JsonResponse({"error": "product_id is required for deleting a product."}, status=400)
+
+        # Verify product exists before attempting deletion
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM Product WHERE product_id = %s AND client_id = %s", [product_id, client_id])
+            product = cursor.fetchone()
+            if not product:
+                return JsonResponse({"error": "Product not found or not authorized to delete this product."},
+                                    status=404)
+
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM Product WHERE product_id = %s AND client_id = %s", [product_id, client_id])
+
+        return JsonResponse({"message": "Product deleted successfully."}, status=200)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, Client
+from .models import CustomUser, Client, Product
 from django.contrib.auth.hashers import make_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -36,3 +36,12 @@ class ClientSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"client_id": "This client ID is already in use."})
 
         return Client.objects.create(**validated_data)
+
+class ProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = [
+            'product_id', 'client', 'name', 'HSN_code', 'tax_percentage',
+            'unit', 'category', 'brand', 'default_selling_price', 'sales_rank',
+            'created_on', 'created_by', 'last_updated_on', 'last_updated_by'
+        ]
