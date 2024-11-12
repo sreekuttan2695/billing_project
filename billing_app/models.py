@@ -45,3 +45,27 @@ class Product(models.Model):
     class Meta:
         db_table = 'Product'
         ordering = ['product_id']
+
+class Customer(models.Model):
+    customer_id = models.AutoField(primary_key=True)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100, null=False)
+    address = models.TextField(null=True)
+    phone = models.CharField(max_length=15, null=False)
+    email_id = models.EmailField(null=True)
+    category = models.CharField(max_length=50, null=False)
+    GSTIN = models.CharField(max_length=15, null=True)
+    password = models.CharField(max_length=128, null=True)
+    otp = models.CharField(max_length=6, null=True)
+    sales_rank = models.IntegerField(null=True)
+    created_on = models.DateTimeField(default=timezone.now)
+    created_by = models.CharField(max_length=50)
+    last_updated_on = models.DateTimeField(default=timezone.now)
+    last_updated_by = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'Customer'
+        ordering = ['customer_id']

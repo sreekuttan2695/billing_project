@@ -61,6 +61,14 @@ class CustomUserLoginView(APIView):
                 samesite='Lax'
             )
 
+            response.set_cookie(
+                key='username',
+                value=username,
+                httponly=True,
+                secure=True,
+                samesite='Lax'
+            )
+
             return response
         else:
             print("Authentication failed")  # Debugging
@@ -133,13 +141,21 @@ class ProtectedView(APIView):
 class ProductView(View):
 
     def get_client_id_from_cookie(self, request):
-        client_id = request.COOKIES.get('client_id')
+        client_id = request.client_id
         if not client_id:
             return JsonResponse({"error": "client_id is missing from cookies."}, status=400)
         return client_id
 
+    def get_username_from_cookie(self, request):
+        username = request.username
+        if not username:
+            return JsonResponse({"error": "username is missing from cookies."}, status=400)
+        return username
+
+
     def get(self, request):
         client_id = self.get_client_id_from_cookie(request)
+        # username = self.get_username_from_cookie(request)
         if isinstance(client_id, JsonResponse):  # If client_id retrieval failed, return the error response
             return client_id
 
@@ -184,6 +200,7 @@ class ProductView(View):
 
     def post(self, request):
         client_id = self.get_client_id_from_cookie(request)
+        username = self.get_username_from_cookie(request)
         if isinstance(client_id, JsonResponse):
             return client_id
 
@@ -206,13 +223,14 @@ class ProductView(View):
                 timezone.now(),
                 data['created_by'],
                 timezone.now(),
-                data['last_updated_by']
+                username
             ])
 
         return JsonResponse({"message": "Product added successfully."}, status=201)
 
     def put(self, request):
         client_id = self.get_client_id_from_cookie(request)
+        username = self.get_username_from_cookie(request)
         if isinstance(client_id, JsonResponse):
             return client_id
 
@@ -247,7 +265,7 @@ class ProductView(View):
             data['default_selling_price'],
             data.get('sales_rank', None),
             timezone.now(),
-            data['last_updated_by'],
+            username,
             product_id,
             client_id
         ]
@@ -279,3 +297,153 @@ class ProductView(View):
             cursor.execute("DELETE FROM Product WHERE product_id = %s AND client_id = %s", [product_id, client_id])
 
         return JsonResponse({"message": "Product deleted successfully."}, status=200)
+
+# customer end points start here
+@method_decorator(csrf_exempt, name='dispatch')
+class CustomerView(View):
+    permission_classes = [IsAuthenticated]
+
+    def get_client_id_from_cookie(self, request):
+        client_id = request.client_id
+        if not client_id:
+            return JsonResponse({"error": "client_id is missing from cookies."}, status=400)
+        return client_id
+
+    def get_username_from_cookie(self, request):
+        username = request.username
+        if not username:
+            return JsonResponse({"error": "username is missing from cookies."}, status=400)
+        return username
+
+    def get(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        # Get query parameters for search and filtering
+        search_query = request.GET.get('search', '')
+
+        # Base SQL query for fetching customers
+        sql_query = "SELECT customer_id,name,address,phone,email_id,category,gstin,sales_rank FROM Customer WHERE client_id = %s"
+        params = [client_id]
+
+        # Apply search filter if provided
+        if search_query:
+            sql_query += " AND name LIKE %s"
+            params.append(f"%{search_query}%")
+
+        # Order by customer_id
+        sql_query += " ORDER BY customer_id"
+
+        # Fetch customers
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query, params)
+            customers = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            customer_list = [dict(zip(columns, customer)) for customer in customers]
+
+        return JsonResponse({
+            "customers": customer_list
+        }, status=200)
+
+    def post(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        username = self.get_username_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO Customer (client_id, name, address, phone, email_id, category, GSTIN, password, otp, 
+                    sales_rank, created_on, created_by, last_updated_on, last_updated_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, [
+                client_id,
+                data['name'],
+                data.get('address', None),
+                data['phone'],
+                data.get('email_id', None),
+                data['category'],
+                data.get('GSTIN', None),
+                data.get('password', None),
+                data.get('otp', None),
+                data.get('sales_rank', None),
+                timezone.now(),
+                username,
+                timezone.now(),
+                username
+            ])
+
+        return JsonResponse({"message": "Customer added successfully."}, status=201)
+
+    def put(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        username = self.get_username_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        customer_id = data.get("customer_id")
+        if not customer_id:
+            return JsonResponse({"error": "customer_id is required for updating a customer."}, status=400)
+
+        # Check if the customer exists
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM Customer WHERE customer_id = %s AND client_id = %s", [customer_id, client_id])
+            customer = cursor.fetchone()
+            if not customer:
+                return JsonResponse({"error": "Customer not found or not authorized to modify this customer."},
+                                    status=404)
+
+        # Prepare SQL query to update only the fields that have been provided
+        sql_query = """
+            UPDATE Customer
+            SET name = %s, address = %s, phone = %s, email_id = %s, category = %s, GSTIN = %s, 
+                password = %s, otp = %s, sales_rank = %s, last_updated_on = %s, last_updated_by = %s
+            WHERE customer_id = %s AND client_id = %s
+        """
+
+        params = [
+            data['name'],
+            data.get('address', None),
+            data['phone'],
+            data.get('email_id', None),
+            data['category'],
+            data.get('GSTIN', None),
+            data.get('password', None),
+            data.get('otp', None),
+            data.get('sales_rank', None),
+            timezone.now(),
+            username,
+            customer_id,
+            client_id
+        ]
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query, params)
+
+        return JsonResponse({"message": "Customer updated successfully."}, status=200)
+
+    def delete(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        customer_id = data.get("customer_id")
+        if not customer_id:
+            return JsonResponse({"error": "customer_id is required for deleting a customer."}, status=400)
+
+        # Verify customer exists before attempting deletion
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM Customer WHERE customer_id = %s AND client_id = %s", [customer_id, client_id])
+            customer = cursor.fetchone()
+            if not customer:
+                return JsonResponse({"error": "Customer not found or not authorized to delete this customer."},
+                                    status=404)
+
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM Customer WHERE customer_id = %s AND client_id = %s", [customer_id, client_id])
+
+        return JsonResponse({"message": "Customer deleted successfully."}, status=200)

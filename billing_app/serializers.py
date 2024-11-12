@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, Client, Product
+from .models import CustomUser, Client, Product, Customer
 from django.contrib.auth.hashers import make_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -45,3 +45,16 @@ class ProductSerializer(serializers.ModelSerializer):
             'unit', 'category', 'brand', 'default_selling_price', 'sales_rank',
             'created_on', 'created_by', 'last_updated_on', 'last_updated_by'
         ]
+
+class CustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = [
+            'customer_id', 'client', 'name', 'address', 'phone', 'email_id', 'category',
+            'GSTIN', 'password', 'otp', 'sales_rank', 'created_on', 'created_by',
+            'last_updated_on', 'last_updated_by'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True},  # Hide password field in responses
+            'otp': {'write_only': True}        # Hide OTP field in responses
+        }
