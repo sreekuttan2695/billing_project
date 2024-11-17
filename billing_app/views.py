@@ -139,6 +139,7 @@ class ProtectedView(APIView):
 # /product end points starts here
 @method_decorator(csrf_exempt, name='dispatch')
 class ProductView(View):
+    permission_classes = [IsAuthenticated]
 
     def get_client_id_from_cookie(self, request):
         client_id = request.client_id
