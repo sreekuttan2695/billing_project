@@ -165,7 +165,7 @@ class ProductView(View):
         selected_categories = request.GET.getlist('categories')  # Expects a list of categories
 
         # Base SQL query for fetching products
-        sql_query = "SELECT * FROM Product WHERE client_id = %s"
+        sql_query = "SELECT product_id, name, HSN_code, tax_percentage, discount_rate, unit,category, brand,price_after_tax, price_before_tax, sales_rank FROM Product WHERE client_id = %s"
         params = [client_id]
 
         # Apply search filter if provided
@@ -208,18 +208,20 @@ class ProductView(View):
         data = json.loads(request.body)
         with connection.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO Product (client_id, name, HSN_code, tax_percentage, unit, category, brand, 
-                    default_selling_price, sales_rank, created_on, created_by, last_updated_on, last_updated_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO Product (client_id, name, HSN_code, tax_percentage, discount_rate, unit, category, brand, 
+                    price_after_tax, price_before_tax, sales_rank, created_on, created_by, last_updated_on, last_updated_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, [
                 client_id,
                 data['name'],
                 data['HSN_code'],
                 data['tax_percentage'],
+                data['discount_rate'],
                 data['unit'],
                 data.get('category', None),
                 data.get('brand', None),
-                data['default_selling_price'],
+                data['price_after_tax'],
+                data['price_before_tax'],
                 data.get('sales_rank', None),
                 timezone.now(),
                 data['created_by'],
@@ -251,8 +253,8 @@ class ProductView(View):
         # Prepare SQL query to update only the fields that have been provided
         sql_query = """
             UPDATE Product
-            SET name = %s, HSN_code = %s, tax_percentage = %s, unit = %s, category = %s, brand = %s, 
-                default_selling_price = %s, sales_rank = %s, last_updated_on = %s, last_updated_by = %s
+            SET name = %s, HSN_code = %s, tax_percentage = %s, discount_rate = %s, unit = %s, category = %s, brand = %s, 
+                price_after_tax = %s, price_before_tax = %s, sales_rank = %s, last_updated_on = %s, last_updated_by = %s
             WHERE product_id = %s AND client_id = %s
         """
 
@@ -260,10 +262,12 @@ class ProductView(View):
             data['name'],
             data['HSN_code'],
             data['tax_percentage'],
+            data['discount_rate'],
             data['unit'],
             data.get('category', None),
             data.get('brand', None),
-            data['default_selling_price'],
+            data['price_after_tax'],
+            data['price_before_tax'],
             data.get('sales_rank', None),
             timezone.now(),
             username,
@@ -448,3 +452,22 @@ class CustomerView(View):
             cursor.execute("DELETE FROM Customer WHERE customer_id = %s AND client_id = %s", [customer_id, client_id])
 
         return JsonResponse({"message": "Customer deleted successfully."}, status=200)
+
+# For getting client information for billing
+class ClientPlaceOfSupplyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        client_id = request.COOKIES.get('client_id')
+        if not client_id:
+            return JsonResponse({"message": "Client ID missing from cookies"}, status=400)
+
+        # Fetch the client's place of supply
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT place_of_supply FROM billing_app_client WHERE client_id = %s", [client_id])
+            result = cursor.fetchone()
+
+        if result:
+            return JsonResponse({"place_of_supply": result[0]}, status=200)
+        else:
+            return JsonResponse({"message": "Place of supply not found for the client"}, status=404)

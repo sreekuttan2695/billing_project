@@ -28,7 +28,7 @@ class ClientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Client
-        fields = ['client_id', 'name', 'address', 'phone', 'email', 'created_by', 'last_updated_by']
+        fields = ['client_id', 'name', 'address', 'phone', 'email', 'gstn', 'place_of_supply' 'created_by', 'last_updated_by']
 
     def create(self, validated_data):
         # Check if the client_id is already taken
@@ -41,8 +41,8 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'product_id', 'client', 'name', 'HSN_code', 'tax_percentage',
-            'unit', 'category', 'brand', 'default_selling_price', 'sales_rank',
+            'product_id', 'client', 'name', 'HSN_code', 'tax_percentage', 'discount_rate',
+            'unit', 'category', 'brand', 'price_after_tax', 'price_before_tax', 'sales_rank',
             'created_on', 'created_by', 'last_updated_on', 'last_updated_by'
         ]
 
