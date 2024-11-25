@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Login Test</title>
+</head>
+<body>
+    <h2>Login</h2>
+    <form id="loginForm">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required><br><br>
+
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required><br><br>
+
+        <button type="submit">Login</button>
+    </form>
+
+    <h3>Protected View</h3>
+    <button id="protectedViewButton">Access Protected View</button>
+    <div id="protectedViewResult"></div>
+
+    <h3>Create User</h3>
+    <form id="createUserForm">
+        <label for="newUsername">Username:</label>
+        <input type="text" id="newUsername" name="newUsername" required><br><br>
+        
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required><br><br>
+
+        <label for="phone">Phone:</label>
+        <input type="text" id="phone" name="phone" required><br><br>
+        
+        <label for="address">Address:</label>
+        <input type="text" id="address" name="address" required><br><br>
+        
+        <label for="newPassword">Password:</label>
+        <input type="password" id="newPassword" name="newPassword" required><br><br>
+
+        <label for="clientId">Client ID:</label>
+        <input type="number" id="userClientId" name="clientId" required><br><br>
+
+        <button type="submit">Create User</button>
+    </form>
+
+    <h3>Create Client</h3>
+    <form id="createClientForm">
+        <label for="clientId">Client ID:</label>
+        <input type="number" id="clientId" name="clientId" required><br><br>
+
+        <label for="clientName">Client Name:</label>
+        <input type="text" id="clientName" name="clientName" required><br><br>
+        
+        <label for="address">Address:</label>
+        <input type="text" id="clientAddress" name="clientAddress" required><br><br>
+
+        <label for="phone">Phone:</label>
+        <input type="text" id="clientPhone" name="clientPhone" required><br><br>
+        
+        <label for="email">Email:</label>
+        <input type="email" id="clientEmail" name="clientEmail" required><br><br>
+
+        <label for="createdBy">Created By:</label>
+        <input type="text" id="createdBy" name="createdBy" required><br><br>
+
+        <label for="lastUpdatedBy">Last Updated By:</label>
+        <input type="text" id="lastUpdatedBy" name="lastUpdatedBy" required><br><br>
+
+        <button type="submit">Create Client</button>
+    </form>
+	
+	<h3>Product Management</h3>
+    <button id="productPageButton">Go to Product Page</button>
+	
+	<h3>Customer Management</h3>
+    <button id="customerPageButton">Go to Customer Page</button>
+
+    <div id="result"></div>
+	
+	<button id="logoutButton">Logout</button>
+
+    <script src="login.js"></script>
+	<script>
+        document.getElementById("productPageButton").addEventListener("click", function() {
+            window.location.href = "product.html";
+        });
+		
+		document.getElementById("customerPageButton").addEventListener("click", async function () {
+			const isAuthenticated = await checkAuthStatus();
+			if (isAuthenticated) {
+				window.location.href = "customer.html";
+			} else {
+				alert("Please login to access the customer page.");
+			}
+		});
+		async function checkAuthStatus() {
+			try {
+				const response = await fetch("http://127.0.0.1:8000/protected/", {
+					method: "GET",
+					credentials: "include"
+				});
+				return response.ok;
+			} catch (error) {
+				console.error("Error checking auth status:", error);
+				return false;
+			}
+		}
+    </script>
+</body>
+</html>

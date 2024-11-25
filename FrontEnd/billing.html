@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing System</title>
+    <link rel="stylesheet" href="styles.css"> <!-- Optional for styling -->
+    <style>
+        /* Basic styles for modal popup */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 30%;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h2>Billing Page</h2>
+    <form id="searchCustomerForm">
+        <label for="customerName">Customer Name:</label>
+        <input type="text" id="customerName" placeholder="Type to search..." autocomplete="off">
+
+        <label for="customerPhone">Phone:</label>
+        <input type="text" id="customerPhone" placeholder="Auto-filled" disabled>
+
+        <label for="customerAddress">Address:</label>
+        <input type="text" id="customerAddress" placeholder="Auto-filled" disabled>
+
+        <label for="customerGSTIN">GSTIN:</label>
+        <input type="text" id="customerGSTIN" placeholder="Auto-filled" disabled>
+    </form>
+
+    <div id="suggestionBox">
+        <!-- Suggestions will be displayed here dynamically -->
+    </div>
+
+    <div>
+        <button id="addNewCustomerButton">Add New Customer</button>
+    </div>
+
+    <!-- Pop-up Form for Adding Customer -->
+    <div id="addCustomerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h3>Add New Customer</h3>
+            <form id="addCustomerForm">
+                <label for="addName">Name:</label>
+                <input type="text" id="addName" placeholder="Enter name" required><br><br>
+
+                <label for="addPhone">Phone:</label>
+                <input type="text" id="addPhone" placeholder="Enter phone" required><br><br>
+
+                <label for="addAddress">Address:</label>
+                <input type="text" id="addAddress" placeholder="Enter address"><br><br>
+
+                <label for="addGSTIN">GSTIN:</label>
+                <input type="text" id="addGSTIN" placeholder="Enter GSTIN"><br><br>
+
+                <label for="addCategory">Category:</label>
+                <input type="text" id="addCategory" placeholder="Enter category"><br><br>
+
+                <label for="addSalesRank">Sales Rank:</label>
+                <input type="number" id="addSalesRank" placeholder="Enter sales rank"><br><br>
+
+                <button type="submit">Save Customer</button>
+            </form>
+        </div>
+    </div>
+	
+	<form id="billingDetailsForm">
+    <label for="placeOfSupply">Place of Supply:</label>
+    <select id="placeOfSupply" name="placeOfSupply" required>
+        <option value="">Select a state</option>
+        <option value="Andhra Pradesh">Andhra Pradesh</option>
+		<option value="Arunachal Pradesh">Arunachal Pradesh</option>
+		<option value="Assam">Assam</option>
+		<option value="Bihar">Bihar</option>
+		<option value="Chhattisgarh">Chhattisgarh</option>
+		<option value="Goa">Goa</option>
+		<option value="Gujarat">Gujarat</option>
+		<option value="Haryana">Haryana</option>
+		<option value="Himachal Pradesh">Himachal Pradesh</option>
+		<option value="Jharkhand">Jharkhand</option>
+		<option value="Karnataka">Karnataka</option>
+		<option value="Kerala">Kerala</option>
+		<option value="Madhya Pradesh">Madhya Pradesh</option>
+		<option value="Maharashtra">Maharashtra</option>
+		<option value="Manipur">Manipur</option>
+		<option value="Meghalaya">Meghalaya</option>
+		<option value="Mizoram">Mizoram</option>
+		<option value="Nagaland">Nagaland</option>
+		<option value="Odisha">Odisha</option>
+		<option value="Punjab">Punjab</option>
+		<option value="Rajasthan">Rajasthan</option>
+		<option value="Sikkim">Sikkim</option>
+		<option value="Tamil Nadu">Tamil Nadu</option>
+		<option value="Telangana">Telangana</option>
+		<option value="Tripura">Tripura</option>
+		<option value="Uttar Pradesh">Uttar Pradesh</option>
+		<option value="Uttarakhand">Uttarakhand</option>
+		<option value="West Bengal">West Bengal</option>
+		<!-- Union Territories -->
+		<option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+		<option value="Chandigarh">Chandigarh</option>
+		<option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
+		<option value="Delhi">Delhi</option>
+		<option value="Lakshadweep">Lakshadweep</option>
+		<option value="Puducherry">Puducherry</option>
+		<option value="Ladakh">Ladakh</option>
+		<option value="Jammu and Kashmir">Jammu and Kashmir</option>
+
+    </select><br><br>
+
+    <label for="invoiceDate">Invoice Date:</label>
+    <input type="date" id="invoiceDate" name="invoiceDate" value="" required><br><br>
+
+    <label for="rcmCheckbox">RCM:</label>
+    <input type="checkbox" id="rcmCheckbox" name="rcmCheckbox"><br><br>
+	</form>
+	
+	<h3>Add Products to Bill</h3>
+	<table id="productTable">
+		<thead>
+			<tr>
+				<th>Product Name</th>
+				<th>Qty</th>
+				<th>Unit</th>
+				<th>Price Before Tax</th>
+				<th>Discount</th>
+				<th>Tax Rate</th>
+				<th>Taxable Price</th>
+				<th>Total Amount</th>
+				<th>Action</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td><input type="text" class="product-name" placeholder="Type product name" autocomplete="off"></td>
+				<td><input type="number" class="qty" min="1"></td>
+				<td><input type="text" class="unit" disabled></td>
+				<td><input type="text" class="price-before-tax" disabled></td>
+				<td><input type="text" class="discount" disabled></td>
+				<td><input type="text" class="tax-rate" disabled></td>
+				<td><input type="text" class="taxable-price" disabled></td>
+				<td><input type="text" class="total-amount" disabled></td>
+				<td><button type="button" class="delete-row">Delete</button></td>
+			</tr>
+		</tbody>
+	</table>
+	
+	<div>
+    <label for="otherDiscount">Other Discount:</label>
+    <input type="number" id="otherDiscount" min="0" step="0.01" placeholder="Enter other discounts">
+	</div>
+
+	<div id="summarySection">
+		<!-- Summary content -->
+	</div>
+	<div id="totalPayable" style="font-weight: bold; margin-top: 10px;">Total Payable: ₹0.00</div>
+	<div id="totalPayableWords" style="font-style: italic; margin-top: 5px;">In Words: Zero Rupees Only</div>
+
+
+    <script src="billing.js"></script>
+</body>
+</html>

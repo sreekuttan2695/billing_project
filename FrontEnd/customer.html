@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Management</title>
+</head>
+<body>
+    <h2>Customer Management</h2>
+
+    <!-- Search and Filter -->
+    <input type="text" id="searchBar" placeholder="Search by name">
+    <button id="searchButton">Search</button>
+
+    <!-- Customer Table -->
+    <table id="customerTable" border="1">
+        <thead>
+            <tr>
+				<th>Name</th>
+                <th>Address</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Category</th>
+                <th>GSTIN</th>
+                <th>Sales Rank</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Add Customer Row -->
+    <h3>Add New Customer</h3>
+    <div id="addCustomerRow">
+        <input type="text" id="newCustomerName" placeholder="Name" required>
+        <input type="text" id="newCustomerAddress" placeholder="Address">
+        <input type="text" id="newCustomerPhone" placeholder="Phone" required>
+        <input type="email" id="newCustomerEmail" placeholder="Email">
+        <input type="text" id="newCustomerCategory" placeholder="Category" required>
+        <input type="text" id="newCustomerGSTIN" placeholder="GSTIN">
+        <input type="number" id="newCustomerSalesRank" placeholder="Sales Rank">
+        <button id="addCustomerButton">Add Customer</button>
+    </div>
+
+    <script src="customer.js"></script>
+</body>
+</html>
