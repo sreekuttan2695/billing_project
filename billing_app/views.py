@@ -471,3 +471,75 @@ class ClientPlaceOfSupplyView(APIView):
             return JsonResponse({"place_of_supply": result[0]}, status=200)
         else:
             return JsonResponse({"message": "Place of supply not found for the client"}, status=404)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CreateBillView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_client_id_from_cookie(self, request):
+        client_id = request.client_id
+        if not client_id:
+            return JsonResponse({"error": "client_id is missing from cookies."}, status=400)
+        return client_id
+
+    def get_username_from_cookie(self, request):
+        username = request.username
+        if not username:
+            return JsonResponse({"error": "username is missing from cookies."}, status=400)
+        return username
+
+    def post(self, request):
+        print(request.data)  # Debugging: Log the request payload
+        return JsonResponse({"message": "Create Bill API reached successfully!"})
+
+        client_id = self.get_client_id_from_cookie(request)
+        username = self.get_username_from_cookie(request)
+        try:
+            data = json.loads(request.body)
+           # client_id = request.COOKIES.get("client_id")
+           # username = request.COOKIES.get("username")
+
+            # Fetch customer_id from customer name
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT customer_id FROM Customer WHERE name = %s AND client_id = %s", [data["customer_name"], client_id])
+                customer_id = cursor.fetchone()
+                if not customer_id:
+                    return JsonResponse({"error": "Customer not found"}, status=400)
+
+            # Fetch product_ids for each product in bill_items
+            bill_items = data["bill_items"]
+            for item in bill_items:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT product_id FROM Product WHERE name = %s AND client_id = %s", [item["product_name"], client_id])
+                    product_id = cursor.fetchone()
+                    if not product_id:
+                        return JsonResponse({"error": f"Product '{item['product_name']}' not found"}, status=400)
+                    item["product_id"] = product_id[0]
+
+            # Prepare bill_tax_splits
+            bill_tax_splits = data["bill_tax_splits"]
+
+            # Call stored procedure
+            with connection.cursor() as cursor:
+                cursor.callproc("CreateBill", [
+                    client_id,
+                    customer_id[0],
+                    data["invoice_date"],
+                    data["place_of_supply"],
+                    data["total_amount_before_tax"],
+                    data["discount"],
+                    data["total_amount"],
+                    data["status"],
+                    data["is_rcm"],
+                    username,
+                    0,  # bill_id (output parameter)
+                    json.dumps(bill_items),
+                    json.dumps(bill_tax_splits)
+                ])
+                cursor.execute("SELECT @bill_id AS bill_id")
+                result = cursor.fetchone()
+                bill_id = result["bill_id"]
+
+            return JsonResponse({"message": "Bill created successfully", "bill_id": bill_id}, status=201)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)

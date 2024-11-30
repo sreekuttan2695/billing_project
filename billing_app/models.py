@@ -73,3 +73,61 @@ class Customer(models.Model):
     class Meta:
         db_table = 'Customer'
         ordering = ['customer_id']
+
+# Customer_Bill Model
+class CustomerBill(models.Model):
+    bill_id = models.AutoField(primary_key=True)
+    customer = models.ForeignKey('Customer', on_delete=models.CASCADE)
+    client = models.ForeignKey('Client', on_delete=models.CASCADE)
+    invoice_no = models.CharField(max_length=50, unique=True)
+    invoice_date = models.DateField(default=None)
+    place_of_supply = models.CharField(max_length=255)
+    total_amount_before_tax = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=50, choices=[
+        ('Estimate', 'Estimate'),
+        ('Invoice', 'Invoice'),
+        ('Advance paid', 'Advance paid'),
+        ('Partially paid', 'Partially paid'),
+        ('Completely paid', 'Completely paid'),
+        ('Cancelled', 'Cancelled')
+    ])
+    is_rcm = models.BooleanField(default=False)
+    created_on = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=255)
+    last_updated_on = models.DateTimeField(auto_now=True)
+    last_updated_by = models.CharField(max_length=255)
+
+# Bill_Items Model
+class BillItem(models.Model):
+    bill_item_id = models.AutoField(primary_key=True)
+    bill = models.ForeignKey(CustomerBill, on_delete=models.CASCADE)
+    client = models.ForeignKey('Client', on_delete=models.CASCADE)
+    product = models.ForeignKey('Product', on_delete=models.CASCADE)
+    qty = models.PositiveIntegerField()
+    unit = models.CharField(max_length=50)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2)
+    taxable_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_on = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=255)
+    last_updated_on = models.DateTimeField(auto_now=True)
+    last_updated_by = models.CharField(max_length=255)
+
+# Bill_Tax_Splits Model
+class BillTaxSplit(models.Model):
+    bts_id = models.AutoField(primary_key=True)
+    bill = models.ForeignKey(CustomerBill, on_delete=models.CASCADE)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2)
+    SGST = models.DecimalField(max_digits=10, decimal_places=2)
+    CGST = models.DecimalField(max_digits=10, decimal_places=2)
+    IGST = models.DecimalField(max_digits=10, decimal_places=2)
+    CESS = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    created_on = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=255)
+    last_updated_on = models.DateTimeField(auto_now=True)
+    last_updated_by = models.CharField(max_length=255)
+

@@ -150,6 +150,11 @@ CSRF_COOKIE_SECURE = True # Set this to true in production, added as part of JWT
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://127.0.0.1:8001",  # Frontend origin
+]
+
+
 
 
 # Static files (CSS, JavaScript, Images)

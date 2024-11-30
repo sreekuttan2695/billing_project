@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, Client, Product, Customer
+from .models import CustomUser, Client, Product, Customer, CustomerBill, BillItem, BillTaxSplit
 from django.contrib.auth.hashers import make_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -58,3 +58,21 @@ class CustomerSerializer(serializers.ModelSerializer):
             'password': {'write_only': True},  # Hide password field in responses
             'otp': {'write_only': True}        # Hide OTP field in responses
         }
+
+# Customer_Bill Serializer
+class CustomerBillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomerBill
+        fields = '__all__'
+
+# Bill_Items Serializer
+class BillItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillItem
+        fields = '__all__'
+
+# Bill_Tax_Splits Serializer
+class BillTaxSplitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillTaxSplit
+        fields = '__all__'
