@@ -4,10 +4,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import CustomUser
+from .models import CustomUser, CustomerBill, BillItem, BillTaxSplit, Customer, Client, Product
 from django.contrib.auth import authenticate
 from django.db import transaction
-from .serializers import CustomUserSerializer, ClientSerializer, ProductSerializer
+from .serializers import (CustomUserSerializer, ClientSerializer, ProductSerializer,
+                          BillItemSerializer, CustomerBillSerializer, BillTaxSplitSerializer)
 from .permissions import IsSuperAdminUser
 from django.views import View
 from django.http import JsonResponse
@@ -472,74 +473,116 @@ class ClientPlaceOfSupplyView(APIView):
         else:
             return JsonResponse({"message": "Place of supply not found for the client"}, status=404)
 
-@method_decorator(csrf_exempt, name='dispatch')
+
 class CreateBillView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]  # Ensures only authenticated users can access
 
     def get_client_id_from_cookie(self, request):
-        client_id = request.client_id
+        # Assuming client_id is stored in cookies
+        client_id = request.COOKIES.get("client_id")
         if not client_id:
-            return JsonResponse({"error": "client_id is missing from cookies."}, status=400)
+            return Response({"error": "client_id is missing from cookies."}, status=400)
         return client_id
 
     def get_username_from_cookie(self, request):
-        username = request.username
+        # Assuming username is stored in cookies
+        username = request.COOKIES.get("username")
         if not username:
-            return JsonResponse({"error": "username is missing from cookies."}, status=400)
+            return Response({"error": "username is missing from cookies."}, status=400)
         return username
 
-    def post(self, request):
-        print(request.data)  # Debugging: Log the request payload
-        return JsonResponse({"message": "Create Bill API reached successfully!"})
+    def post(self, request, *args, **kwargs):
+        """
+        Handles the creation of a new bill by inserting data into Customer_Bill, Bill_Items, and Bill_Tax_Splits.
+        """
+        data = request.data
 
+        # Get client_id and username from cookies
         client_id = self.get_client_id_from_cookie(request)
         username = self.get_username_from_cookie(request)
+
+        if isinstance(client_id, Response) or isinstance(username, Response):
+            return client_id or username
+
+        # Fetch customer_id using customer_name and client_id
+        customer_name = data.get("customer_name")
+        if not customer_name:
+            return Response({"error": "Customer name is required."}, status=400)
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT customer_id FROM Customer WHERE name = %s AND client_id = %s",
+                [customer_name, client_id]
+            )
+            customer_id = cursor.fetchone()
+            if not customer_id:
+                return Response({"error": f"Customer '{customer_name}' not found."}, status=400)
+            customer_id = customer_id[0]  # Extract customer_id from tuple
+
         try:
-            data = json.loads(request.body)
-           # client_id = request.COOKIES.get("client_id")
-           # username = request.COOKIES.get("username")
+            with transaction.atomic():
+                # Insert into Customer_Bill
+                customer_bill = CustomerBill.objects.create(
+                    customer=Customer.objects.get(customer_id=customer_id),  # ForeignKey to Customer
+                    client=Client.objects.get(client_id=client_id),  # ForeignKey to Client - passing this and customer as instance rather than just ids
+                    invoice_no="INV12345",  # You should generate this dynamically
+                    invoice_date=data["invoice_date"],
+                    place_of_supply=data["place_of_supply"],
+                    total_amount_before_tax=data["total_amount_before_tax"],
+                    discount=data["discount"],
+                    total_amount=data["total_amount"],
+                    status=data["status"],
+                    is_rcm=data["is_rcm"],
+                    created_by=username,
+                    created_on=timezone.now(),
+                    last_updated_by=username
+                )
 
-            # Fetch customer_id from customer name
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT customer_id FROM Customer WHERE name = %s AND client_id = %s", [data["customer_name"], client_id])
-                customer_id = cursor.fetchone()
-                if not customer_id:
-                    return JsonResponse({"error": "Customer not found"}, status=400)
+                # Insert into Bill_Items
+                for item in data["bill_items"]:
+                    product_name = item.get("product_name")
+                    if not product_name:
+                        return Response({"error": "Product name is required for each bill item."}, status=400)
 
-            # Fetch product_ids for each product in bill_items
-            bill_items = data["bill_items"]
-            for item in bill_items:
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT product_id FROM Product WHERE name = %s AND client_id = %s", [item["product_name"], client_id])
-                    product_id = cursor.fetchone()
-                    if not product_id:
-                        return JsonResponse({"error": f"Product '{item['product_name']}' not found"}, status=400)
-                    item["product_id"] = product_id[0]
+                    # Fetch product instance using product_name and client_id
+                    try:
+                        product = Product.objects.get(name=product_name, client_id=client_id)
+                    except Product.DoesNotExist:
+                        return Response({"error": f"Product '{product_name}' not found."}, status=400)
 
-            # Prepare bill_tax_splits
-            bill_tax_splits = data["bill_tax_splits"]
+                    # Insert item into Bill_Items table
+                    BillItem.objects.create(
+                        bill=customer_bill,  # ForeignKey to CustomerBill
+                        client=Client.objects.get(client_id=client_id),  # ForeignKey to Client
+                        product=product,  # ForeignKey to Product
+                        qty=item["qty"],
+                        unit=item["unit"],
+                        price=item["price"],
+                        discount=item["discount"],
+                        tax_rate=item["tax_rate"],
+                        taxable_amount=item["taxable_amount"],
+                        total_amount=item["total_amount"],
+                        created_by=username,
+                        created_on=timezone.now(),
+                        last_updated_by=username,
+                    )
 
-            # Call stored procedure
-            with connection.cursor() as cursor:
-                cursor.callproc("CreateBill", [
-                    client_id,
-                    customer_id[0],
-                    data["invoice_date"],
-                    data["place_of_supply"],
-                    data["total_amount_before_tax"],
-                    data["discount"],
-                    data["total_amount"],
-                    data["status"],
-                    data["is_rcm"],
-                    username,
-                    0,  # bill_id (output parameter)
-                    json.dumps(bill_items),
-                    json.dumps(bill_tax_splits)
-                ])
-                cursor.execute("SELECT @bill_id AS bill_id")
-                result = cursor.fetchone()
-                bill_id = result["bill_id"]
+                # Insert into Bill_Tax_Splits
+                for tax in data["bill_tax_splits"]:
+                    BillTaxSplit.objects.create(
+                        bill=customer_bill,  # ForeignKey to CustomerBill
+                        tax_rate=tax["tax_rate"],
+                        SGST=tax["SGST"],
+                        CGST=tax["CGST"],
+                        IGST=tax["IGST"],
+                        CESS=tax.get("CESS", 0.0),  # Default to 0.0 if CESS is not provided
+                        created_by=username,
+                        created_on=timezone.now(),
+                        last_updated_by=username,
+                    )
 
-            return JsonResponse({"message": "Bill created successfully", "bill_id": bill_id}, status=201)
+            return Response({"message": "Bill created successfully!"}, status=status.HTTP_201_CREATED)
+
         except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
+            print(f"Error in CreateBillView: {e}")
+            return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
