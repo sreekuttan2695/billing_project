@@ -17,6 +17,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import json
+import random
+import string
+from datetime import datetime
 
 # Login View
 class CustomUserLoginView(APIView):
@@ -491,6 +494,24 @@ class CreateBillView(APIView):
             return Response({"error": "username is missing from cookies."}, status=400)
         return username
 
+    def generate_unique_invoice_no(self, client_id):
+        while True:
+            # Generate a random 3-character text (uppercase letters only)
+            random_text = ''.join(random.choices(string.ascii_uppercase, k=3))
+
+            # Generate a random 3-digit number
+            random_number = ''.join(random.choices(string.digits, k=3))
+
+            # Get the current year in YY format
+            year = datetime.now().strftime('%y')
+
+            # Concatenate to form the invoice number
+            invoice_no = f"{year}{random_text}{random_number}"
+
+            # Check if the generated invoice_no already exists for the client_id
+            if not CustomerBill.objects.filter(client_id=client_id, invoice_no=invoice_no).exists():
+                return invoice_no
+
     def post(self, request, *args, **kwargs):
         """
         Handles the creation of a new bill by inserting data into Customer_Bill, Bill_Items, and Bill_Tax_Splits.
@@ -519,13 +540,15 @@ class CreateBillView(APIView):
                 return Response({"error": f"Customer '{customer_name}' not found."}, status=400)
             customer_id = customer_id[0]  # Extract customer_id from tuple
 
+        invoice_no = self.generate_unique_invoice_no(client_id)
+
         try:
             with transaction.atomic():
                 # Insert into Customer_Bill
                 customer_bill = CustomerBill.objects.create(
                     customer=Customer.objects.get(customer_id=customer_id),  # ForeignKey to Customer
                     client=Client.objects.get(client_id=client_id),  # ForeignKey to Client - passing this and customer as instance rather than just ids
-                    invoice_no="INV12345",  # You should generate this dynamically
+                    invoice_no=invoice_no,  # You should generate this dynamically
                     invoice_date=data["invoice_date"],
                     place_of_supply=data["place_of_supply"],
                     total_amount_before_tax=data["total_amount_before_tax"],
@@ -581,8 +604,53 @@ class CreateBillView(APIView):
                         last_updated_by=username,
                     )
 
-            return Response({"message": "Bill created successfully!"}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"message": "Bill created successfully!", "invoice_no": customer_bill.invoice_no},
+                status=status.HTTP_201_CREATED
+            )
 
         except Exception as e:
             print(f"Error in CreateBillView: {e}")
             return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Fetch the latest invoice details with optional filters for customer name and invoice number.
+        """
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, Response):
+            return client_id
+
+        # Retrieve query parameters for filters
+        customer_name_filter = request.GET.get("customer_name", "")
+        invoice_no_filter = request.GET.get("invoice_no", "")
+
+        try:
+            # Base SQL query
+            sql_query = """
+                SELECT b.invoice_no, b.invoice_date, c.name AS customer_name, 
+                       b.total_amount, b.status, b.last_updated_on
+                FROM billing_app_customerbill b
+                INNER JOIN customer c ON c.client_id = b.client_id AND c.customer_id = b.customer_id
+                WHERE b.client_id = %s 
+                AND (b.invoice_no LIKE %s AND c.name LIKE %s)
+                ORDER BY b.last_updated_on DESC 
+                LIMIT 10
+            """
+            params = [client_id, f"%{invoice_no_filter}%", f"%{customer_name_filter}%"]
+
+            # Execute query
+            with connection.cursor() as cursor:
+                cursor.execute(sql_query, params)
+                rows = cursor.fetchall()
+                columns = [col[0] for col in cursor.description]
+                invoices = [dict(zip(columns, row)) for row in rows]
+
+            return Response({"invoices": invoices}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error fetching billing management data: {e}")
+            return Response(
+                {"error": "An error occurred while fetching billing management data."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
