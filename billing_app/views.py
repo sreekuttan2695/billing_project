@@ -654,3 +654,91 @@ class CreateBillView(APIView):
                 {"error": "An error occurred while fetching billing management data."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class ChangeBillView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_client_id_from_cookie(self, request):
+        # Assuming client_id is stored in cookies
+        client_id = request.COOKIES.get("client_id")
+        if not client_id:
+            return Response({"error": "client_id is missing from cookies."}, status=400)
+        return client_id
+
+    def get(self, request, *args, **kwargs):
+        """
+        Fetch detailed bill information for a given invoice number.
+        """
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, Response):
+            return client_id
+
+        # Retrieve the invoice number from the query parameters
+        invoice_no = request.GET.get("invoice_no")
+        if not invoice_no:
+            return Response({"error": "Invoice number is required."}, status=400)
+
+        try:
+            # Query 1: Fetch customer and basic bill details
+            bill_details_query = """
+                SELECT b.invoice_no, c.name, c.phone, c.address, c.GSTIN,
+                       b.place_of_supply, b.invoice_date, b.is_rcm, 
+                       b.total_amount_before_tax, b.discount, b.total_amount, b.status
+                FROM billing_app_customerbill b
+                INNER JOIN customer c ON b.customer_id = c.customer_id
+                WHERE b.invoice_no = %s AND b.client_id = %s
+            """
+            with connection.cursor() as cursor:
+                cursor.execute(bill_details_query, [invoice_no, client_id])
+                bill_details = cursor.fetchone()
+
+            if not bill_details:
+                return Response({"error": "No bill found for the provided invoice number."}, status=404)
+
+            # Query 2: Fetch product details
+            product_details_query = """
+                SELECT p.name, b.qty, b.unit, b.price, b.discount, 
+                       b.tax_rate, b.taxable_amount, b.total_amount
+                FROM billing_app_billitem b
+                INNER JOIN product p ON b.product_id = p.product_id
+                WHERE b.bill_id IN (
+                    SELECT bill_id FROM billing_app_customerbill WHERE invoice_no = %s AND client_id = %s
+                )
+            """
+            with connection.cursor() as cursor:
+                cursor.execute(product_details_query, [invoice_no, client_id])
+                product_details = cursor.fetchall()
+
+            # Query 3: Fetch tax split details
+            tax_split_query = """
+                SELECT t.tax_rate, t.SGST, t.CGST, t.IGST, t.CESS
+                FROM billing_app_billtaxsplit t
+                INNER JOIN billing_app_customerbill b ON t.bill_id = b.bill_id
+                WHERE b.invoice_no = %s AND b.client_id = %s
+            """
+            with connection.cursor() as cursor:
+                cursor.execute(tax_split_query, [invoice_no, client_id])
+                tax_split_details = cursor.fetchall()
+
+            # Construct the response
+            response_data = {
+                "bill_details": dict(zip(
+                    ["invoice_no", "name", "phone", "address", "GSTIN",
+                     "place_of_supply", "invoice_date", "is_rcm",
+                     "total_amount_before_tax", "discount", "total_amount", "status"],
+                    bill_details
+                )),
+                "product_details": [
+                    dict(zip(["name", "qty", "unit", "price", "discount", "tax_rate", "taxable_amount", "total_amount"], row))
+                    for row in product_details
+                ],
+                "tax_split_details": [
+                    dict(zip(["tax_rate", "SGST", "CGST", "IGST", "CESS"], row))
+                    for row in tax_split_details
+                ]
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error fetching bill details: {e}")
+            return Response({"error": "An error occurred while fetching bill details."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
