@@ -48,21 +48,21 @@ class CustomUserLoginView(APIView):
                 value=access_token,
                 httponly=True,
                 secure=True,
-                samesite='Lax'
+                samesite='None'
             )
             response.set_cookie(
                 key='refresh_token',
                 value=str(refresh),
                 httponly=True,
                 secure=True,
-                samesite='Lax'
+                samesite='None'
             )
             response.set_cookie(
                 key='client_id',
                 value=client_id,
                 httponly=True,
                 secure=True,
-                samesite='Lax'
+                samesite='None'
             )
 
             response.set_cookie(
@@ -70,7 +70,7 @@ class CustomUserLoginView(APIView):
                 value=username,
                 httponly=True,
                 secure=True,
-                samesite='Lax'
+                samesite='None'
             )
 
             return response
@@ -458,6 +458,7 @@ class CustomerView(View):
         return JsonResponse({"message": "Customer deleted successfully."}, status=200)
 
 # For getting client information for billing
+@method_decorator(csrf_exempt, name='dispatch')
 class ClientPlaceOfSupplyView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -476,7 +477,7 @@ class ClientPlaceOfSupplyView(APIView):
         else:
             return JsonResponse({"message": "Place of supply not found for the client"}, status=404)
 
-
+@method_decorator(csrf_exempt, name='dispatch')
 class CreateBillView(APIView):
     permission_classes = [IsAuthenticated]  # Ensures only authenticated users can access
 
@@ -655,6 +656,7 @@ class CreateBillView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ChangeBillView(APIView):
     permission_classes = [IsAuthenticated]
 
