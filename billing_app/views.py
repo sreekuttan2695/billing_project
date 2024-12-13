@@ -685,7 +685,7 @@ class ChangeBillView(APIView):
             bill_details_query = """
                 SELECT b.invoice_no, c.name, c.phone, c.address, c.GSTIN,
                        b.place_of_supply, b.invoice_date, b.is_rcm, 
-                       b.total_amount_before_tax, b.discount, b.total_amount, b.status
+                       b.total_amount_before_tax, b.discount, b.total_amount, b.status, b.bill_id
                 FROM billing_app_customerbill b
                 INNER JOIN customer c ON b.customer_id = c.customer_id
                 WHERE b.invoice_no = %s AND b.client_id = %s
@@ -700,7 +700,7 @@ class ChangeBillView(APIView):
             # Query 2: Fetch product details
             product_details_query = """
                 SELECT p.name, b.qty, b.unit, b.price, b.discount, 
-                       b.tax_rate, b.taxable_amount, b.total_amount
+                       b.tax_rate, b.taxable_amount, b.total_amount, b.bill_item_id
                 FROM billing_app_billitem b
                 INNER JOIN product p ON b.product_id = p.product_id
                 WHERE b.bill_id IN (
@@ -713,7 +713,7 @@ class ChangeBillView(APIView):
 
             # Query 3: Fetch tax split details
             tax_split_query = """
-                SELECT t.tax_rate, t.SGST, t.CGST, t.IGST, t.CESS
+                SELECT t.tax_rate, t.SGST, t.CGST, t.IGST, t.CESS, t.bts_id
                 FROM billing_app_billtaxsplit t
                 INNER JOIN billing_app_customerbill b ON t.bill_id = b.bill_id
                 WHERE b.invoice_no = %s AND b.client_id = %s
@@ -727,11 +727,11 @@ class ChangeBillView(APIView):
                 "bill_details": dict(zip(
                     ["invoice_no", "name", "phone", "address", "GSTIN",
                      "place_of_supply", "invoice_date", "is_rcm",
-                     "total_amount_before_tax", "discount", "total_amount", "status"],
+                     "total_amount_before_tax", "discount", "total_amount", "status", "bill_id"],
                     bill_details
                 )),
                 "product_details": [
-                    dict(zip(["name", "qty", "unit", "price", "discount", "tax_rate", "taxable_amount", "total_amount"], row))
+                    dict(zip(["name", "qty", "unit", "price", "discount", "tax_rate", "taxable_amount", "total_amount", "bill_item_id"], row))
                     for row in product_details
                 ],
                 "tax_split_details": [
@@ -744,3 +744,77 @@ class ChangeBillView(APIView):
         except Exception as e:
             print(f"Error fetching bill details: {e}")
             return Response({"error": "An error occurred while fetching bill details."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, *args, **kwargs):
+        data = request.data
+        invoice_no = data.get("invoice_no")
+
+        if not invoice_no:
+            return Response({"error": "Invoice number is required."}, status=400)
+
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, Response):
+            return client_id
+
+        # Fetch bill details to validate existence
+        try:
+            customer_bill = CustomerBill.objects.get(invoice_no=invoice_no, client_id=client_id)
+        except CustomerBill.DoesNotExist:
+            return Response({"error": "Invoice not found."}, status=404)
+
+        try:
+            with transaction.atomic():
+                # Update customer_id if the customer name is changed
+                customer_name = data.get("customer_name")
+                if customer_name:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT customer_id FROM Customer WHERE name = %s AND client_id = %s",
+                            [customer_name, client_id],
+                        )
+                        customer_id = cursor.fetchone()
+                        if not customer_id:
+                            return Response({"error": f"Customer '{customer_name}' not found."}, status=400)
+
+                        customer_bill.customer_id = customer_id[0]
+                        customer_bill.save()
+
+                # Update, delete bill items (no insertion allowed)
+                for item in data["bill_items"]:
+                    if item.get("action") == "delete":
+                        BillItem.objects.filter(bill=customer_bill, id=item["bill_item_id"]).delete()
+                    elif item.get("action") == "update":
+                        bill_item = BillItem.objects.get(id=item["bill_item_id"], bill=customer_bill)
+                        bill_item.qty = item["qty"]
+                        bill_item.unit = item["unit"]
+                        bill_item.price = item["price"]
+                        bill_item.discount = item["discount"]
+                        bill_item.tax_rate = item["tax_rate"]
+                        bill_item.taxable_amount = item["taxable_amount"]
+                        bill_item.total_amount = item["total_amount"]
+                        bill_item.save()
+
+                # Update tax splits
+                BillTaxSplit.objects.filter(bill=customer_bill).delete()
+                for tax in data["bill_tax_splits"]:
+                    BillTaxSplit.objects.create(
+                        bill=customer_bill,
+                        tax_rate=tax["tax_rate"],
+                        SGST=tax["SGST"],
+                        CGST=tax["CGST"],
+                        IGST=tax["IGST"],
+                        CESS=tax.get("CESS", 0.0),
+                    )
+
+                # Update main bill details
+                customer_bill.total_amount_before_tax = data["total_amount_before_tax"]
+                customer_bill.discount = data["discount"]
+                customer_bill.total_amount = data["total_amount"]
+                customer_bill.is_rcm = data["is_rcm"]
+                customer_bill.status = data["status"]
+                customer_bill.save()
+
+            return Response({"message": "Bill updated successfully."}, status=200)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
