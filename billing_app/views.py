@@ -735,7 +735,7 @@ class ChangeBillView(APIView):
                     for row in product_details
                 ],
                 "tax_split_details": [
-                    dict(zip(["tax_rate", "SGST", "CGST", "IGST", "CESS"], row))
+                    dict(zip(["tax_rate", "SGST", "CGST", "IGST", "CESS", "bts_id"], row))
                     for row in tax_split_details
                 ]
             }
@@ -782,9 +782,9 @@ class ChangeBillView(APIView):
                 # Update, delete bill items (no insertion allowed)
                 for item in data["bill_items"]:
                     if item.get("action") == "delete":
-                        BillItem.objects.filter(bill=customer_bill, id=item["bill_item_id"]).delete()
+                        BillItem.objects.filter(bill=customer_bill, bill_item_id=item["bill_item_id"]).delete()
                     elif item.get("action") == "update":
-                        bill_item = BillItem.objects.get(id=item["bill_item_id"], bill=customer_bill)
+                        bill_item = BillItem.objects.get(bill_item_id=item["bill_item_id"], bill=customer_bill)
                         bill_item.qty = item["qty"]
                         bill_item.unit = item["unit"]
                         bill_item.price = item["price"]
@@ -795,16 +795,23 @@ class ChangeBillView(APIView):
                         bill_item.save()
 
                 # Update tax splits
-                BillTaxSplit.objects.filter(bill=customer_bill).delete()
+                # BillTaxSplit.objects.filter(bill=customer_bill).delete()
                 for tax in data["bill_tax_splits"]:
-                    BillTaxSplit.objects.create(
-                        bill=customer_bill,
-                        tax_rate=tax["tax_rate"],
-                        SGST=tax["SGST"],
-                        CGST=tax["CGST"],
-                        IGST=tax["IGST"],
-                        CESS=tax.get("CESS", 0.0),
-                    )
+                    # BillTaxSplit.objects.create(
+                    #     bill=customer_bill,
+                    #     tax_rate=tax["tax_rate"],
+                    #     SGST=tax["SGST"],
+                    #     CGST=tax["CGST"],
+                    #     IGST=tax["IGST"],
+                    #     CESS=tax.get("CESS", 0.0),
+                    # )
+                    bill_tax_split = BillTaxSplit.objects.get(bts_id=tax["bts_id"])
+                    bill_tax_split.tax_rate = tax["tax_rate"]
+                    bill_tax_split.SGST = tax["SGST"]
+                    bill_tax_split.CGST = tax["CGST"]
+                    bill_tax_split.IGST = tax["IGST"]
+                    bill_tax_split.CESS = tax["CESS"]
+                    bill_tax_split.save()
 
                 # Update main bill details
                 customer_bill.total_amount_before_tax = data["total_amount_before_tax"]
