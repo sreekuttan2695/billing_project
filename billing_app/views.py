@@ -825,3 +825,142 @@ class ChangeBillView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+class VendorManagement(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_client_id_from_cookie(self, request):
+        client_id = request.COOKIES.get("client_id")
+        if not client_id:
+            return JsonResponse({"error": "client_id is missing from cookies."}, status=400)
+        return client_id
+
+    def get_username_from_cookie(self, request):
+        username = request.COOKIES.get("username")
+        if not username:
+            return JsonResponse({"error": "username is missing from cookies."}, status=400)
+        return username
+
+    def get(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        # Get search query for filtering vendors
+        search_query = request.GET.get("search", "")
+
+        sql_query = """
+            SELECT vendor_id, name, address, phone, email_id, place_of_supply, GSTIN 
+            FROM vendor 
+            WHERE is_inactive=FALSE and client_id = %s
+        """
+        params = [client_id]
+
+        if search_query:
+            sql_query += " AND name LIKE %s"
+            params.append(f"%{search_query}%")
+
+        sql_query += " ORDER BY vendor_id"
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query, params)
+            vendors = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            vendor_list = [dict(zip(columns, vendor)) for vendor in vendors]
+
+        return JsonResponse({"vendors": vendor_list}, status=200)
+
+    def post(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        username = self.get_username_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO vendor (
+                    client_id, name, address, phone, email_id, place_of_supply, GSTIN, 
+                    is_inactive, created_on, created_by, last_updated_on, last_updated_by
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, [
+                client_id,
+                data['name'],
+                data.get('address', None),
+                data['phone'],
+                data.get('email_id', None),
+                data['place_of_supply'],
+                data.get('GSTIN', "NRP"),
+                False,
+                timezone.now(),
+                username,
+                timezone.now(),
+                username
+            ])
+
+        return JsonResponse({"message": "Vendor added successfully."}, status=201)
+
+    def put(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        username = self.get_username_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        vendor_id = data.get("vendor_id")
+        if not vendor_id:
+            return JsonResponse({"error": "vendor_id is required for updating a vendor."}, status=400)
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM vendor WHERE vendor_id = %s AND client_id = %s", [vendor_id, client_id])
+            vendor = cursor.fetchone()
+            if not vendor:
+                return JsonResponse({"error": "Vendor not found or not authorized to modify this vendor."}, status=404)
+
+        sql_query = """
+            UPDATE vendor
+            SET name = %s, address = %s, phone = %s, email_id = %s, place_of_supply = %s, 
+                GSTIN = %s, is_inactive = %s, last_updated_on = %s, last_updated_by = %s
+            WHERE vendor_id = %s AND client_id = %s
+        """
+
+        params = [
+            data['name'],
+            data.get('address', None),
+            data['phone'],
+            data.get('email_id', None),
+            data['place_of_supply'],
+            data.get('GSTIN', "NRP"),
+            data.get('is_inactive', 0),
+            timezone.now(),
+            username,
+            vendor_id,
+            client_id
+        ]
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query, params)
+
+        return JsonResponse({"message": "Vendor updated successfully."}, status=200)
+
+    def delete(self, request):
+        client_id = self.get_client_id_from_cookie(request)
+        if isinstance(client_id, JsonResponse):
+            return client_id
+
+        data = json.loads(request.body)
+        vendor_id = data.get("vendor_id")
+        if not vendor_id:
+            return JsonResponse({"error": "vendor_id is required for deleting a vendor."}, status=400)
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM vendor WHERE vendor_id = %s AND client_id = %s", [vendor_id, client_id])
+            vendor = cursor.fetchone()
+            if not vendor:
+                return JsonResponse({"error": "Vendor not found or not authorized to delete this vendor."}, status=404)
+
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM vendor WHERE vendor_id = %s AND client_id = %s", [vendor_id, client_id])
+
+        return JsonResponse({"message": "Vendor deleted successfully."}, status=200)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, Client, Product, Customer, CustomerBill, BillItem, BillTaxSplit
+from .models import CustomUser, Client, Product, Customer, CustomerBill, BillItem, BillTaxSplit, Vendor
 from django.contrib.auth.hashers import make_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -76,3 +76,23 @@ class BillTaxSplitSerializer(serializers.ModelSerializer):
     class Meta:
         model = BillTaxSplit
         fields = '__all__'
+
+class VendorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor
+        fields = [
+            'vendor_id',
+            'client_id',
+            'name',
+            'address',
+            'phone',
+            'email_id',
+            'place_of_supply',
+            'GSTIN',
+            'is_inactive',
+            'created_on',
+            'created_by',
+            'last_updated_on',
+            'last_updated_by',
+        ]
+        # read_only_fields = ['vendor_id', 'created_on', 'created_by', 'last_updated_on', 'last_updated_by']

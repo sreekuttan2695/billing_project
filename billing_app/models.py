@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.utils.timezone import now
+
 
 class Client(models.Model):
     client_id = models.AutoField(primary_key=True)
@@ -131,3 +133,24 @@ class BillTaxSplit(models.Model):
     last_updated_on = models.DateTimeField(auto_now=True)
     last_updated_by = models.CharField(max_length=255)
 
+class Vendor(models.Model):
+    vendor_id = models.AutoField(primary_key=True)
+    client = models.ForeignKey('Client', on_delete=models.CASCADE, related_name="vendors")
+    name = models.CharField(max_length=255)
+    address = models.TextField()
+    phone = models.CharField(max_length=15)
+    email_id = models.EmailField(null=True, blank=True)
+    place_of_supply = models.CharField(max_length=255)
+    GSTIN = models.CharField(max_length=15, default="NRP")
+    is_inactive = models.BooleanField(default=False)
+    created_on = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=255)
+    last_updated_on = models.DateTimeField(auto_now=True)
+    last_updated_by = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'Vendor'
+        ordering = ['vendor_id']
